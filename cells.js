@@ -1,92 +1,108 @@
 class Cell {
-    constructor(xpos, ypos, x, y, bomb) {
-      this.xpos = xpos;
-      this.ypos = ypos;
-      this.x = x;
-      this.y = y;
-      this.bomb = bomb;
-      this.hidden = true;
-      this.nCount = 0;
-      this.flagged = false;
-      this.fColor = [
-        [255, 255, 255],
-        [102, 255, 0],
-        [204, 255, 0],
-        [255, 204, 0],
-        [255, 153, 0],
-        [255, 51, 0],
-        [255, 0, 0]
-      ];
-    }
-  
-    draw() {
-      var angle = TWO_PI / 6;
-      if (!this.hidden && this.nCount > 0 && !this.bomb) {
-        fill(100);
-      }
-      if (!this.hidden && this.nCount == 0 && !this.bomb) {
-        fill(204, 237, 250);
-      }
-      beginShape();
-      for (var a = 0; a < TWO_PI; a += angle) {
-        var sx = this.xpos + cos(a) * gridSize;
-        var sy = this.ypos + sin(a) * gridSize;
-        vertex(sx, sy);
-      }
-      endShape(CLOSE);
-      if (!this.hidden) {
-        if (this.nCount > 0) {
-          push();
-          textSize(18);
-          fill(
-            this.fColor[this.nCount][0],
-            this.fColor[this.nCount][1],
-            this.fColor[this.nCount][2]
-          );
-          translate(this.xpos - 20, this.ypos - 20);
-          textAlign(CENTER, CENTER);
-          text("" + this.nCount, 0, 0, 45, 40);
-          pop();
+  constructor(i, j, w) {
+    this.bee = false;
+    this.reveal = false;
+
+    this.neighbours = 0;
+    this.i = i;
+    this.j = j;
+    this.x = i * w;
+    this.y = j * w;
+    this.w = w;
+  }
+}
+function resolveAfter10Seconds() {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve("resolved");
+    }, 4000);
+  });
+}
+function resolveAfterHalfSeconds() {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve("resolved");
+    }, 500);
+  });
+}
+
+Cell.prototype.findSurrounding = function () {
+  var total = 0;
+  if (this.bee) {
+    this.neighbours = -1;
+    return;
+  }
+  for (var yy = -1; yy <= 1; yy++) {
+    for (var xx = -1; xx <= 1; xx++) {
+      var i = this.i + yy;
+      var j = this.j + xx;
+      if (i > -1 && i < 10 && j > -1 && j < 10) {
+        var meobj = grid[i][j].bee;
+        if (meobj) {
+          total++;
         }
-        noFill();
-      }
-      if (playing == false && this.bomb) {
-        fill(0);
-        ellipse(this.xpos, this.ypos, 20, 20);
-        noFill();
-      } else if (this.flagged) {
-        push();
-        fill(255, 0, 0);
-        rectMode(CENTER);
-        rect(this.xpos, this.ypos - 5, 14, 10);
-        line(this.xpos - 7, this.ypos - 5, this.xpos - 7, this.ypos + 10);
-        pop();
-      }
-    }
-    click(auto = false) {
-      if (!this.flagged || auto == true) {
-        this.flagged = false;
-        if (this.bomb) {
-          playing = false;
-        } else if (this.hidden) {
-          pieces--;
-        }
-  
-        this.hidden = false;
-        if (this.nCount == 0) {
-          let neighbours = findNeighbours(this.x, this.y);
-          for (let neighbour of neighbours) {
-            let cell = cells[neighbour[0]][neighbour[1]];
-            if (!cell.bomb && cell.hidden) {
-              cell.click(true);
-            }
-          }
-        }
-      }
-    }
-    flag() {
-      if (this.hidden) {
-        this.flagged = !this.flagged;
       }
     }
   }
+  this.neighbours = total;
+};
+var alertMe = 0;
+
+function displaySolution() {
+  //try to make it start from the mine
+  for (var i = 0; i < col; i++) {
+    for (var j = 0; j < row; j++) {
+      grid[i][j].reveals();
+    }
+  }
+}
+
+Cell.prototype.show = async function () {
+  stroke(0);
+  noFill();
+  rect(this.x, this.y, this.w, this.w);
+  if (this.reveal) {
+    if (this.bee) {
+      fill(89);
+      ellipse(this.x + this.w * 0.5, this.y + this.w * 0.5, this.w * 0.5);
+      if (alertMe == 0) {
+        alertMe++;
+        await resolveAfterHalfSeconds();
+
+        alert("you hit a mine! Restarting the match!!");
+        displaySolution();
+        await resolveAfter10Seconds();
+        location.reload();
+      }
+    } else {
+      fill(126);
+      rect(this.x, this.y, this.w, this.w);
+      textAlign(CENTER);
+      fill(0);
+      text(this.neighbours, this.x + this.w * 0.5, this.y + this.w - 6);
+    }
+  }
+};
+
+Cell.prototype.contains = function (x, y) {
+  return x > this.x && x < this.x + this.w && y > this.y && y < this.y + this.w;
+};
+
+Cell.prototype.reveals = function () {
+  this.reveal = true;
+  if (this.neighbours == 0) {
+    this.floodFilll();
+  }
+};
+Cell.prototype.floodFilll = function () {
+  for (var yy = -1; yy <= 1; yy++) {
+    for (var xx = -1; xx <= 1; xx++) {
+      var i = this.i + yy;
+      var j = this.j + xx;
+      if (i > -1 && i < 10 && j > -1 && j < 10) {
+        var meobj = grid[i][j];
+        if (!meobj.bee && !meobj.reveal) meobj.reveals();
+      }
+    }
+  }
+};
